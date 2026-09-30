@@ -6,9 +6,11 @@ Built for the University of Canterbury course *Computer Programming* (COSC480, g
 
 **▶ Explore the interactive maps:** [fatal crash heatmap (animated by year)](https://williamhuichang-code.github.io/nz-road-crash-analysis/data/fatal_heatmap_with_year.html) · [serious and fatal crash pinmap](https://williamhuichang-code.github.io/nz-road-crash-analysis/data/pinmap_bright_dark.html) · [severity cluster map](https://williamhuichang-code.github.io/nz-road-crash-analysis/data/cluster_map_for_severity.html)
 
-<!-- screenshots: add images to screenshots/ and uncomment
-![Fatal crash heatmap](screenshots/heatmap.png)
--->
+| Fatal crash heatmap (animated by year) | Serious and fatal crashes, light and dark maps |
+|---|---|
+| ![Fatal crash heatmap](screenshots/heatmap.png) | ![Crash pinmap](screenshots/pinmap.png) |
+| **Severity cluster map, with a crash pop-up** | **Menu-driven report and trends graph** |
+| ![Crash cluster map](screenshots/clustermap.png) | ![Crash report and trends graph](screenshots/report_and_trends.png) |
 
 ## What it does
 
@@ -30,49 +32,27 @@ Behind the menu, the data goes through several automatic steps:
 - **Cleaning:** removes crashes whose coordinates fall outside New Zealand's official bounds.
 - **Input validation:** every prompt shows the valid options, standardises what you type, and explains what went wrong if it can't be matched (for example, a year with no records).
 
+## What the maps suggest
+
+Exploring the maps pointed to a few patterns (visual, exploratory observations rather than statistical tests):
+
+- **Fatal crashes cluster in two kinds of places:** densely populated urban areas, and open rural roads with high speed limits. The overall pattern stays similar from year to year.
+- **Darkness matters:** on the side-by-side pinmap, fatal crashes appear more often in dark conditions.
+- **State Highway 1 north of Wellington** shows a noticeable concentration of fatal crashes compared with other stretches.
+- **Motorcycles and trees:** looking at individual crashes, fatal crashes more often involve a motorcycle or a tree than crashes of lower severity.
+
 ## How it's designed
 
-```mermaid
-classDiagram
-    DataFrame <|-- DSDf
-    DSDf <|-- CrashDf
-    DSDf <|-- CrimeDf
-    DSDf <|-- NYCDf
-    str <|-- CleanInput
-    Menu ..> CleanInput : cleans input with
-    class DataFrame["pandas.DataFrame"]
-    class DSDf["DSDf (data science DataFrame)"]{
-        +_xy_mutate_lonlat()
-        +meterbounds_for_projected_country()
-        +print_in_chain()
-        +pause_in_chain()
-    }
-    class CrashDf{
-        +df_loaded_with_online_update()
-        +_df_with_effective_speed()
-        +cleaned_crashdf_by_nz_bounds()
-    }
-    class Menu{
-        +display_with_index()
-        +general_prompt()
-        +validate_with_index()
-    }
-```
+![My general framework for data science projects using OOP](screenshots/framework.png)
 
 - **`DSDf`** extends `pandas.DataFrame` with general data science steps, such as coordinate conversion and helpers that print or pause *inside* a method chain. It keeps its own type after slicing, so a filtered `DSDf` is still a `DSDf`.
 - **`CrashDf`** adds everything specific to the crash data: loading with the live API update, the effective speed limit and cleaning by NZ bounds. `CrimeDf` and `NYCDf` are placeholders showing how the same base could serve other datasets.
 - **`Menu`** and **`CleanInput`** handle all user interaction in one consistent way.
 - **Feature functions** (`module_crashdf_features.py`) chain these methods into reports and maps, and **`main.py`** only runs the menu.
 
-The result reads like a pipeline:
+I held every part to the same five goals: **fast, raises no error, user friendly, informative, and extendable.** For example, the data loads once and the menu then loops without reloading; every input is checked, but the program tolerates reasonable variations in what people type.
 
-```python
-# data: load → update from the API → effective speed → lon/lat → clean
-df = CrashDf.df_loaded_with_online_update(CrashDf._crash_csv_name).cleaned_crashdf_by_nz_bounds()
-
-# user input: show the options → ask → validate
-choice = Menu(options).display_with_index().general_prompt().validate_with_index()
-```
+Why it's built around method chains is the story of the next section.
 
 ## How this project changed the way I code
 
@@ -82,10 +62,27 @@ My coding style went through three stages during this project, and each one chan
 
 **2. Making it readable (weeks 5–7).** I started breaking large functions into small ones, each doing one thing. The code became easier to read and test, and I began to see repeated patterns across features.
 
-**3. "Pypelines": from functions to objects (week 8 onwards).** The real turning point came from R. In R, `%>%` lets data flow through a chain of steps: `df %>% mutate() %>% filter() %>% summarise()`. I wanted the same in Python, where the output of one step naturally becomes the input of the next. I called the idea "Pypelines", and chasing it led me to object-oriented programming.
+**3. From nested brackets to "Pypelines" (week 8 onwards).** The turning point was noticing that my decomposed code looked like a maths equation full of nested brackets:
 
-- **Objects that operate on themselves.** If each method returns the object itself, a chain of methods becomes a pipeline. So I made the DataFrame the object: `DSDf` extends pandas, and a crash dataset can *enrich itself, clean itself and describe itself*. Every step reads in order, top to bottom.
-- **The menu became an object too.** A menu displays itself, prompts for input, validates it and returns a clean answer, which is exactly `Menu(...).display_with_index().general_prompt().validate_with_index()`.
+```python
+# nested: read from the innermost bracket outwards, passing arguments down every layer
+report(filter(clean(enrich(load(file), speed_col), bounds), year, speed), severity)
+```
+
+As in maths, you have to start from the innermost bracket and work outwards. And the more I decomposed my functions, the worse it got: every layer had to receive arguments only to pass them further down, which was painful to write and even harder to read.
+
+Then R's pipe gave me the idea. In R, `df %>% mutate() %>% filter() %>% summarise()` lets data flow through steps in the order you think about them. I wanted the same in Python and called it "Pypelines". The answer was object-oriented programming: if each method works on the object and returns it, you can start from the core and chain every step outwards, like `core.(1).(2).(3)`:
+
+```python
+# chained: read left to right, each step works on the object itself
+CrashDf.df_loaded_with_online_update(file).cleaned_crashdf_by_nz_bounds()
+Menu(options).display_with_index().general_prompt().validate_with_index()
+```
+
+No more passing arguments all the way down, because the data travels inside the object. That idea shaped everything else:
+
+- **Objects that operate on themselves.** I made the DataFrame the object: `DSDf` extends pandas, so a crash dataset can *enrich itself, clean itself and describe itself*, and every step reads in order.
+- **The menu became an object too.** A menu displays itself, prompts for input, validates it and returns a clean answer.
 - **Framework over script.** Because general behaviour lives in `DSDf` and crash-specific behaviour in `CrashDf`, the structure can serve a different dataset just by adding a subclass. For the first time I was designing something reusable, not only solving this one assignment.
 
 A few lessons I still use:
@@ -120,6 +117,7 @@ class_helper_clean_input.py  CleanInput: standardises user input
 module_crashdf_features.py   reports, trends graph and maps
 data/                        generated interactive maps (HTML)
 docs/design-notes.md         feature-by-feature implementation notes
+screenshots/                 images used in this README
 ```
 
 ## Next steps
