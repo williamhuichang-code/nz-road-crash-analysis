@@ -1,3 +1,11 @@
--e "data/\n*.csv\n*.parquet\n*.zip\n*.db\n" 
--e "data/\n*.csv\n*.parquet\n*.zip\n*.db\n" 
-"data/`n*.csv`n*.parquet`n*.zip`n*.db" 
+# Python caches and environments
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# raw data (download from Waka Kotahi, see README)
+data/*.csv
+*.parquet
+*.zip
+*.db

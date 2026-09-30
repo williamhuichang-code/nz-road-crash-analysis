@@ -1,8 +1,6 @@
-# Crash Data Analysis
+# Design Notes: Feature by Feature
 
-**Author:** William Hui Chang  
-**Student ID:** 69051925  
-**Date:** March 8, 2025
+These are the notes I wrote during the course: for each feature, how I implemented it and why I made each coding choice. The [main README](../README.md) gives the overview and the story behind the design.
 
 ## 1. Initial Program Behavior:
 - Explanation of initial data form.
@@ -47,7 +45,7 @@
 ## 3. How to Run:
 To execute this program run following command from a terminal:
 
-`python3 main - Task B (crash).py`
+`python main.py`
 
 ## 4. Future Development:
 ### 1. Validate user input: Crash Severity Report (Basic Analysis Feature)

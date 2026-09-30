@@ -4,6 +4,7 @@
 """
 
 from class_dsdf import DSDf
+import os
 import pandas as pd_crash
 import numpy as np_crash
 import requests as requests_crash
@@ -21,6 +22,8 @@ class CrashDf(DSDf):
    # class constants
    # local crash file name for git launching and local testing
    _crash_csv_name = r"Crash_Analysis_System_(CAS)_data.csv"
+   # folder holding the local csv: set CRASH_DATA_DIR, or place the file in ./data
+   _data_dir = os.environ.get("CRASH_DATA_DIR", "data")
    # for online update, common url part
    _common_url_part = r"https://services.arcgis.com/CXBb7LAjgIIdcsPt/arcgis/rest/services/CAS_Data_Public/FeatureServer/0"
    # for online update, primary key of crash data
@@ -53,9 +56,12 @@ class CrashDf(DSDf):
          f"&f=json"
          )
       # the HTTP response
-      http_response = requests_crash.get(update_url)
+      http_response = requests_crash.get(update_url, timeout=30)
       # .json() converts the HTTP response into a nested Python list of dicts
-      nested_attribute_list = http_response.json().get('features', [])
+      payload = http_response.json()
+      if 'error' in payload:
+         raise RuntimeError(payload['error'].get('message', payload['error']))
+      nested_attribute_list = payload.get('features', [])
       all_attributes = []
       for attribute in nested_attribute_list:
          split_dict_of_geometry = attribute.pop('geometry')
@@ -71,7 +77,19 @@ class CrashDf(DSDf):
       print_divider()
       ### step 0, max local pk from local file and online pk from url, for comparison
       max_local_pk = self._local_maxpk()
-      maxpk_online = self._df_of_n_entries_per_request(max_local_pk, nrows=1, sorting="desc").loc[0,CrashDf._crash_pk]
+      # the newest online entry beyond the local file; empty if already up to date
+      try:
+         latest_online = self._df_of_n_entries_per_request(max_local_pk, nrows=1, sorting="desc")
+      except Exception as err:
+         print(f"[Data Enriching] Online update skipped — the crash data service could not be reached ({err}).")
+         print("Continuing with the local data.")
+         pause()
+         return CrashDf(pd_crash.DataFrame())
+      if latest_online.empty or CrashDf._crash_pk not in latest_online.columns:
+         print("You're all caught up — no newer crashes online, continuing with the local data.")
+         pause()
+         return CrashDf(pd_crash.DataFrame())
+      maxpk_online = latest_online.loc[0, CrashDf._crash_pk]
       ### step 1, make requests until new entries are exhausted
       df_for_new_entries = pd_crash.DataFrame()
       if max_local_pk < maxpk_online:
@@ -85,6 +103,8 @@ class CrashDf(DSDf):
       pause()
       while max_local_pk < maxpk_online:
          _df_of_n_entries_per_request = self._df_of_n_entries_per_request(max_local_pk)
+         if _df_of_n_entries_per_request.empty:
+            break  # nothing more returned, stop instead of looping forever
          df_for_new_entries = pd_crash.concat([df_for_new_entries, _df_of_n_entries_per_request], axis=0)
          n_collected = df_for_new_entries.shape[0]
          max_local_pk = df_for_new_entries[CrashDf._crash_pk].max()
@@ -134,8 +154,7 @@ class CrashDf(DSDf):
       print_divider()
       print("Now loading ...\n...")
       ### step 0, local parameters
-      pathed_csv = f"D:/Data4Code/{local_csv_name}"  # for local testing
-      # pathed_csv = f"data/{local_csv_name}"  # for git lauching
+      pathed_csv = os.path.join(CrashDf._data_dir, local_csv_name)
       local_raw_df = pd_crash.read_csv(pathed_csv)
       local_df_classed_with_ds = CrashDf(local_raw_df)
       print(f"Dataframe {local_csv_name} has been successfully loaded!")
@@ -147,8 +166,7 @@ class CrashDf(DSDf):
       print_divider()
       print("Now loading ...\n...")
       ### step 0, local parameters
-      pathed_csv = f"D:/Data4Code/{local_csv_name}"  # for local testing
-      # pathed_csv = f"data/{local_csv_name}"  # for git lauching
+      pathed_csv = os.path.join(CrashDf._data_dir, local_csv_name)
       ### refuse to update if local csv file not initialized
       try:
          ### step 1, load local df and get requested_df from online API

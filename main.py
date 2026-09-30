@@ -41,6 +41,8 @@ def main():
     """ Generates reports and graphs based on crash data. """
     # load df
     initialized_raw_df = CrashDf.df_loaded_with_online_update(CrashDf._crash_csv_name)
+    if initialized_raw_df is None:
+        return  # data file missing: the message above explains where to put it
     crash_severity_core_df = core_crash_severity_data(initialized_raw_df)
     core_hm_df = core_crash_heatmap_data(initialized_raw_df)
     # main menu loop
@@ -75,7 +77,5 @@ def main():
 
 
 
-main()
-
-# happy new day
-# happy new day 2
+if __name__ == "__main__":
+    main()
